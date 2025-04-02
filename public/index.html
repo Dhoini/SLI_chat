@@ -42,7 +42,8 @@
         }
 
         // Connect to WebSocket server
-        const wsUrl = `ws://${window.location.host}/ws?username=${encodeURIComponent(username)}`;
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}/ws?username=${encodeURIComponent(username)}`;
         socket = new WebSocket(wsUrl);
 
         socket.onopen = () => {
