@@ -74,6 +74,8 @@ func (m *ClientManager) Start() {
 
 			case message := <-m.broadcast:
 				m.mutex.Lock()
+				clientCount := len(m.clients)
+				log.Printf("Broadcasting to %d clients: %s", clientCount, string(message))
 				for conn, _ := range m.clients {
 					if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
 						log.Println("Write error:", err)
@@ -137,6 +139,7 @@ func Run(addr string) error {
 			if messageType == websocket.TextMessage {
 				// Format message with username
 				formattedMsg := fmt.Sprintf("%s: %s", username, string(msg))
+				log.Printf("Broadcast message: %s", formattedMsg)
 				// Broadcast the message to all clients
 				manager.broadcast <- []byte(formattedMsg)
 			}
