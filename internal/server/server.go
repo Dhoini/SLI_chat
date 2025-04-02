@@ -10,13 +10,13 @@ import (
 	"github.com/gofiber/websocket/v2"
 )
 
-// Client represents a connected WebSocket client
+// Client представляет подключенного WebSocket-клиента
 type Client struct {
 	Conn     *websocket.Conn
 	Username string
 }
 
-// ClientManager manages WebSocket clients and broadcasts
+// ClientManager управляет WebSocket-клиентами и рассылкой
 type ClientManager struct {
 	clients    map[*websocket.Conn]*Client
 	broadcast  chan []byte
@@ -25,15 +25,7 @@ type ClientManager struct {
 	mutex      sync.Mutex
 }
 
-// Message represents a chat message
-type Message struct {
-	Type    string `json:"type"`
-	Content string `json:"content"`
-	Sender  string `json:"sender"`
-	Time    string `json:"time"`
-}
-
-// NewClientManager creates a new client manager
+// NewClientManager создает нового менеджера клиентов
 func NewClientManager() *ClientManager {
 	return &ClientManager{
 		clients:    make(map[*websocket.Conn]*Client),
@@ -43,7 +35,7 @@ func NewClientManager() *ClientManager {
 	}
 }
 
-// Start begins the client manager processing loop
+// Start начинает обработку управления клиентами
 func (m *ClientManager) Start() {
 	go func() {
 		for {
@@ -52,10 +44,10 @@ func (m *ClientManager) Start() {
 				m.mutex.Lock()
 				m.clients[client.Conn] = client
 				m.mutex.Unlock()
-				log.Printf("Client connected: %s", client.Username)
+				log.Printf("Клиент подключен: %s", client.Username)
 
-				// Announce new user to all clients
-				joinMsg := fmt.Sprintf("System: %s joined the chat", client.Username)
+				// Оповещение всех клиентов о новом пользователе
+				joinMsg := fmt.Sprintf("Система: %s присоединился к чату", client.Username)
 				m.broadcast <- []byte(joinMsg)
 
 			case conn := <-m.unregister:
@@ -65,20 +57,20 @@ func (m *ClientManager) Start() {
 					delete(m.clients, conn)
 					conn.Close()
 
-					// Announce user departure
-					leaveMsg := fmt.Sprintf("System: %s left the chat", username)
+					// Оповещение о выходе пользователя
+					leaveMsg := fmt.Sprintf("Система: %s покинул чат", username)
 					m.broadcast <- []byte(leaveMsg)
 				}
 				m.mutex.Unlock()
-				log.Println("Client disconnected")
+				log.Println("Клиент отключен")
 
 			case message := <-m.broadcast:
 				m.mutex.Lock()
 				clientCount := len(m.clients)
-				log.Printf("Broadcasting to %d clients: %s", clientCount, string(message))
+				log.Printf("Рассылка %d клиентам: %s", clientCount, string(message))
 				for conn, _ := range m.clients {
 					if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
-						log.Println("Write error:", err)
+						log.Println("Ошибка отправки:", err)
 						conn.Close()
 						delete(m.clients, conn)
 					}
@@ -89,19 +81,17 @@ func (m *ClientManager) Start() {
 	}()
 }
 
-// Run starts the Fiber server
+// Run запускает Fiber-сервер
 func Run(addr string) error {
-	// Initialize the app
+	// Инициализация приложения
 	app := fiber.New()
 
-	// Create a client manager
+	// Создание менеджера клиентов
 	manager := NewClientManager()
 	manager.Start()
 
-	// WebSocket middleware
+	// Middleware для WebSocket
 	app.Use("/ws", func(c *fiber.Ctx) error {
-		// IsWebSocketUpgrade returns true if the client
-		// requested upgrade to the WebSocket protocol
 		if websocket.IsWebSocketUpgrade(c) {
 			c.Locals("allowed", true)
 			return c.Next()
@@ -109,15 +99,15 @@ func Run(addr string) error {
 		return fiber.ErrUpgradeRequired
 	})
 
-	// WebSocket endpoint
+	// WebSocket-эндпоинт
 	app.Get("/ws", websocket.New(func(c *websocket.Conn) {
-		// Get username from query parameter
+		// Получение имени пользователя из параметров
 		username := c.Query("username")
 		if username == "" {
-			username = fmt.Sprintf("User-%d", time.Now().Unix()%10000)
+			username = fmt.Sprintf("Пользователь-%d", time.Now().Unix()%10000)
 		}
 
-		// Create and register new client
+		// Создание и регистрация нового клиента
 		client := &Client{
 			Conn:     c,
 			Username: username,
@@ -128,42 +118,24 @@ func Run(addr string) error {
 			manager.unregister <- c
 		}()
 
-		// Handle incoming messages
+		// Обработка входящих сообщений
 		for {
 			messageType, msg, err := c.ReadMessage()
 			if err != nil {
-				log.Println("Read error:", err)
+				log.Println("Ошибка чтения:", err)
 				break
 			}
 
 			if messageType == websocket.TextMessage {
-				// Format message with username
+				// Форматирование сообщения с именем пользователя
 				formattedMsg := fmt.Sprintf("%s: %s", username, string(msg))
-				log.Printf("Broadcast message: %s", formattedMsg)
-				// Broadcast the message to all clients
+				log.Printf("Рассылка сообщения: %s", formattedMsg)
+				// Рассылка сообщения всем клиентам
 				manager.broadcast <- []byte(formattedMsg)
 			}
 		}
 	}))
 
-	// Serve static files
-	app.Static("/", "./public")
-
-	// Root endpoint to serve the HTML client
-	app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendFile("./public/index.html")
-	})
-
-	// Serve styles.css
-	app.Get("/styles.css", func(c *fiber.Ctx) error {
-		return c.SendFile("./public/styles.css")
-	})
-
-	// 404 Handler
-	app.Use(func(c *fiber.Ctx) error {
-		return c.Status(fiber.StatusNotFound).SendString("Not Found")
-	})
-
-	// Start the server
+	// Старт сервера
 	return app.Listen(addr)
 }

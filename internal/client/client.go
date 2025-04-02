@@ -12,55 +12,63 @@ import (
 
 // Run запускает консольного клиента
 func Run(url string) {
-	// Ask for username
+	// Запрос имени пользователя
 	var username string
-	fmt.Print("Enter your username: ")
+	fmt.Print("Введите ваше имя: ")
 	scanner := bufio.NewScanner(os.Stdin)
 	if scanner.Scan() {
 		username = scanner.Text()
 	}
 
-	// Add username to websocket URL
+	// Добавление имени пользователя к URL WebSocket
 	if !strings.Contains(url, "?") {
 		url = url + "?username=" + username
 	} else {
 		url = url + "&username=" + username
 	}
 
-	fmt.Printf("Connecting to %s...\n", url)
+	fmt.Printf("Подключение к %s...\n", url)
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
-		log.Fatal("Dial error:", err)
+		log.Fatal("Ошибка подключения:", err)
 	}
 	defer conn.Close()
 
-	fmt.Println("Connected to server")
-	fmt.Println("Type your message and press Enter to send. Type 'exit' to quit.")
+	fmt.Println("Подключено к серверу")
+	fmt.Println("Введите сообщение и нажмите Enter для отправки. Введите 'exit' для выхода.")
 
 	// Горутина для чтения входящих сообщений
 	go func() {
 		for {
 			_, msg, err := conn.ReadMessage()
 			if err != nil {
-				log.Println("Connection closed:", err)
+				log.Println("Соединение закрыто:", err)
 				os.Exit(0)
 				return
 			}
-			fmt.Printf("Received: %s\n", string(msg))
+			fmt.Printf("\n%s\n> ", string(msg))
 		}
 	}()
 
 	// Чтение ввода пользователя и отправка сообщений
 	scanner = bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
+	for {
+		fmt.Print("> ")
+		if !scanner.Scan() {
+			break
+		}
 		text := scanner.Text()
 		if text == "exit" {
-			fmt.Println("Exiting...")
+			fmt.Println("Выход...")
 			break
 		}
 		if err := conn.WriteMessage(websocket.TextMessage, []byte(text)); err != nil {
-			log.Println("Write error:", err)
+			log.Println("Ошибка отправки:", err)
 			return
 		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Println("Ошибка ввода:", err)
 	}
 }
